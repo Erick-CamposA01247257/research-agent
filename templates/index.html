@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Research Agent</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, sans-serif; background: #f5f5f5; height: 100vh; display: flex; flex-direction: column; }
+        .header { background: white; padding: 16px 24px; border-bottom: 1px solid #eee; }
+        .header h1 { font-size: 16px; font-weight: 600; }
+        .header p { font-size: 12px; color: #888; margin-top: 4px; }
+        .main { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+        .input-area { background: white; padding: 16px 24px; border-top: 1px solid #eee; display: flex; gap: 8px; }
+        textarea { flex: 1; border: 1px solid #ddd; border-radius: 8px; padding: 10px 14px; font-size: 14px; outline: none; resize: none; height: 60px; font-family: inherit; }
+        textarea:focus { border-color: #185FA5; }
+        button.enviar { background: #185FA5; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; cursor: pointer; align-self: flex-end; }
+        button.enviar:hover { background: #0C447C; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .objetivo-card { background: #EEEDFE; border-radius: 12px; padding: 16px 20px; border: 1px solid #AFA9EC; }
+        .objetivo-label { font-size: 11px; font-weight: 600; color: #3C3489; margin-bottom: 6px; }
+        .objetivo-texto { font-size: 14px; color: #3C3489; }
+        .pasos-card { background: white; border-radius: 12px; padding: 16px 20px; border: 1px solid #eee; }
+        .pasos-title { font-size: 13px; font-weight: 600; color: #333; margin-bottom: 12px; }
+        .paso { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f5f5f5; align-items: flex-start; }
+        .paso:last-child { border-bottom: none; }
+        .paso-icon { font-size: 16px; min-width: 24px; }
+        .paso-info { flex: 1; }
+        .paso-herramienta { font-size: 12px; font-weight: 600; color: #185FA5; }
+        .paso-params { font-size: 11px; color: #888; margin-top: 2px; }
+        .reporte-card { background: white; border-radius: 12px; padding: 20px 24px; border: 1px solid #eee; }
+        .reporte-label { font-size: 11px; font-weight: 600; color: #888; margin-bottom: 12px; text-transform: uppercase; letter-spacing: .04em; }
+        .reporte-contenido { font-size: 14px; line-height: 1.7; color: #333; }
+        .reporte-contenido h1 { font-size: 18px; font-weight: 600; margin-bottom: 12px; color: #185FA5; }
+        .reporte-contenido h2 { font-size: 15px; font-weight: 600; margin: 16px 0 8px; }
+        .reporte-contenido h3 { font-size: 14px; font-weight: 600; margin: 12px 0 6px; }
+        .reporte-contenido strong { font-weight: 600; }
+        .reporte-contenido em { font-style: italic; }
+        .reporte-contenido ul { padding-left: 20px; margin: 8px 0; }
+        .reporte-contenido li { margin-bottom: 4px; }
+        .reporte-contenido table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+        .reporte-contenido th { border: 1px solid #eee; padding: 8px 12px; font-size: 13px; background: #f5f5f5; font-weight: 600; text-align: left; }
+        .reporte-contenido td { border: 1px solid #eee; padding: 8px 12px; font-size: 13px; }
+        .reporte-contenido tr:nth-child(even) td { background: #fafafa; }
+        .stats { display: flex; gap: 12px; margin-bottom: 4px; }
+        .stat { background: #f9f9f9; border-radius: 8px; padding: 10px 16px; border: 1px solid #eee; }
+        .stat-value { font-size: 20px; font-weight: 600; color: #185FA5; }
+        .stat-label { font-size: 11px; color: #888; margin-top: 2px; }
+        .loading { text-align: center; padding: 40px; color: #888; font-size: 14px; }
+        .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #ddd; border-top-color: #185FA5; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .bienvenida { text-align: center; color: #888; font-size: 14px; margin: auto; line-height: 1.8; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 Research Agent</h1>
+        <p>Dale un objetivo y el agent decidirá cómo lograrlo usando sus herramientas</p>
+    </div>
+
+    <div class="main" id="main">
+        <div class="bienvenida" id="bienvenida">
+            Escribe un objetivo para el agent — por ejemplo:<br><br>
+            "Analiza la situación de TechFlow Solutions en el mercado de Monterrey y genera un reporte ejecutivo"
+        </div>
+    </div>
+
+    <div class="input-area">
+        <textarea
+            id="input"
+            placeholder="Escribe el objetivo del agent..."
+            onkeypress="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); enviar(); }"
+        ></textarea>
+        <button class="enviar" id="btn-enviar" onclick="enviar()">Ejecutar</button>
+    </div>
+
+    <script>
+        const iconos = {
+            "buscar_informacion": "🔍",
+            "calcular": "🧮",
+            "generar_reporte": "📄"
+        }
+
+        function formatearMarkdown(texto) {
+            const lineas = texto.split('\n')
+            let html = ''
+            let enTabla = false
+            let filasTabla = []
+
+            for (let i = 0; i < lineas.length; i++) {
+                const linea = lineas[i]
+
+                if (linea.trim().startsWith('|') && linea.trim().endsWith('|')) {
+                    if (linea.includes('---')) continue
+                    const celdas = linea.split('|').filter(c => c.trim() !== '')
+                    if (!enTabla) {
+                        enTabla = true
+                        filasTabla = []
+                        const encabezados = celdas.map(c => `<th>${c.trim()}</th>`).join('')
+                        filasTabla.push(`<thead><tr>${encabezados}</tr></thead>`)
+                    } else {
+                        const celdaDatos = celdas.map(c => `<td>${c.trim()}</td>`).join('')
+                        filasTabla.push(`<tr>${celdaDatos}</tr>`)
+                    }
+                    continue
+                }
+
+                if (enTabla) {
+                    html += `<table>${filasTabla.join('')}</table>`
+                    enTabla = false
+                    filasTabla = []
+                }
+
+                if (linea.startsWith('# ')) {
+                    html += `<h1>${linea.slice(2)}</h1>`
+                } else if (linea.startsWith('## ')) {
+                    html += `<h2>${linea.slice(3)}</h2>`
+                } else if (linea.startsWith('### ')) {
+                    html += `<h3>${linea.slice(4)}</h3>`
+                } else if (linea.startsWith('- ')) {
+                    html += `<li>${formatearInline(linea.slice(2))}</li>`
+                } else if (linea.trim() === '') {
+                    html += '<br>'
+                } else {
+                    html += `<p>${formatearInline(linea)}</p>`
+                }
+            }
+
+            if (enTabla) {
+                html += `<table>${filasTabla.join('')}</table>`
+            }
+
+            return html
+        }
+
+        function formatearInline(texto) {
+            return texto
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        }
+
+        async function enviar() {
+            const input = document.getElementById("input")
+            const objetivo = input.value.trim()
+            if (!objetivo) return
+
+            document.getElementById("bienvenida")?.remove()
+            input.value = ""
+
+            const btn = document.getElementById("btn-enviar")
+            btn.disabled = true
+            btn.textContent = "Ejecutando..."
+
+            const main = document.getElementById("main")
+
+            const objCard = document.createElement("div")
+            objCard.className = "objetivo-card"
+            objCard.innerHTML = `
+                <div class="objetivo-label">📋 Objetivo</div>
+                <div class="objetivo-texto">${objetivo}</div>
+            `
+            main.appendChild(objCard)
+
+            const loading = document.createElement("div")
+            loading.className = "loading"
+            loading.id = "loading"
+            loading.innerHTML = '<span class="spinner"></span> El agent está trabajando...'
+            main.appendChild(loading)
+            main.scrollTop = main.scrollHeight
+
+            const response = await fetch("/agent", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ texto: objetivo })
+            })
+
+            const data = await response.json()
+            document.getElementById("loading")?.remove()
+
+            const stats = document.createElement("div")
+            stats.className = "stats"
+            stats.innerHTML = `
+                <div class="stat">
+                    <div class="stat-value">${data.pasos.length}</div>
+                    <div class="stat-label">Herramientas usadas</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${data.iteraciones}</div>
+                    <div class="stat-label">Iteraciones</div>
+                </div>
+            `
+            main.appendChild(stats)
+
+            if (data.pasos.length > 0) {
+                const pasosCard = document.createElement("div")
+                pasosCard.className = "pasos-card"
+                pasosCard.innerHTML = `<div class="pasos-title">Pasos del agent</div>`
+
+                data.pasos.forEach((paso) => {
+                    const pasoDiv = document.createElement("div")
+                    pasoDiv.className = "paso"
+                    const icono = iconos[paso.herramienta] || "🔧"
+                    const params = JSON.stringify(paso.parametros)
+                    pasoDiv.innerHTML = `
+                        <div class="paso-icon">${icono}</div>
+                        <div class="paso-info">
+                            <div class="paso-herramienta">${paso.herramienta}</div>
+                            <div class="paso-params">${params}</div>
+                        </div>
+                    `
+                    pasosCard.appendChild(pasoDiv)
+                })
+                main.appendChild(pasosCard)
+            }
+
+            if (data.reporte) {
+                const reporteCard = document.createElement("div")
+                reporteCard.className = "reporte-card"
+                reporteCard.innerHTML = `
+                    <div class="reporte-label">Reporte generado</div>
+                    <div class="reporte-contenido">${formatearMarkdown(data.reporte)}</div>
+                `
+                main.appendChild(reporteCard)
+            }
+
+            btn.disabled = false
+            btn.textContent = "Ejecutar"
+            main.scrollTop = main.scrollHeight
+        }
+    </script>
+</body>
+</html>
